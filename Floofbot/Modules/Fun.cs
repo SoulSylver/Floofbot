@@ -223,6 +223,23 @@ namespace Floofbot.Modules
             }
         }
 
+        [Command("enlarge")]
+        [Summary("Enlarges emoji")]
+        public async Task enlarge([Summary("emoji ID")] string emojiId = "")
+        {
+    /*        int parsedemojiId;
+            if (!int.TryParse(emojiId, out parsedemojiId) || parsedemojiId <= 0)
+            {
+                await Context.Channel.SendMessageAsync("Emoji ID must be a positive integer less than or equal to Int32.MaxValue.");
+                return;
+            }
+    */
+            EmbedBuilder builder = new EmbedBuilder();
+            builder.Title = emojiId;
+            
+            await SendEmbed(builder.Build());
+        }
+
         private async Task SendAnimalEmbed(string title, string fileUrl)
         {
             EmbedBuilder builder = new EmbedBuilder()
