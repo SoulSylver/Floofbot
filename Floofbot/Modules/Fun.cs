@@ -227,16 +227,20 @@ namespace Floofbot.Modules
         [Summary("Enlarges emoji")]
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
-    /*        int parsedemojiId;
-            if (!int.TryParse(emojiId, out parsedemojiId) || parsedemojiId <= 0)
-            {
-                await Context.Channel.SendMessageAsync("Emoji ID must be a positive integer less than or equal to Int32.MaxValue.");
-                return;
-            }
-    */
+
+            var t = Emote.Parse(emojiId);
+
+            string str;
+            str = t.Id.ToString();
+           // await Context.Channel.SendMessageAsync(str);
+            await Context.Channel.SendMessageAsync($"https://cdn.discordapp.com/emojis/{str}.png");
+
+
             EmbedBuilder builder = new EmbedBuilder();
-            builder.Title = emojiId;
-            
+            builder.Title = "Enlarged emoji";
+           // builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}");
+            builder.Color = EMBED_COLOR;
+
             await SendEmbed(builder.Build());
         }
 
