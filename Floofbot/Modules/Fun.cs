@@ -224,24 +224,35 @@ namespace Floofbot.Modules
         }
 
         [Command("enlarge")]
-        [Summary("Enlarges emoji")]
+        [Summary("Enlarges the provided emoji")]
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
 
-            var t = Emote.Parse(emojiId);
+//TODO tryparse
+//TODO default emojis
+//TODO actually enlarging the emoji
 
-            string str;
-            str = t.Id.ToString();
-           // await Context.Channel.SendMessageAsync(str);
-            await Context.Channel.SendMessageAsync($"https://cdn.discordapp.com/emojis/{str}.png");
+            var e = Emote.Parse(emojiId);
+            string str = e.Id.ToString();
 
+            // await Context.Channel.SendMessageAsync(str);
 
+            if (e.Animated){
+                await Context.Channel.SendMessageAsync($"https://cdn.discordapp.com/emojis/{str}.gif");
+            }
+            else {
+                await Context.Channel.SendMessageAsync($"https://cdn.discordapp.com/emojis/{str}.png");
+            }
+            
             EmbedBuilder builder = new EmbedBuilder();
             builder.Title = "Enlarged emoji";
            // builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}");
             builder.Color = EMBED_COLOR;
 
-            await SendEmbed(builder.Build());
+           // await SendEmbed(builder.Build());
+
+//TODO builder?
+
         }
 
         private async Task SendAnimalEmbed(string title, string fileUrl)
