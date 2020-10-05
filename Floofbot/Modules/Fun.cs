@@ -251,6 +251,7 @@ namespace Floofbot.Modules
 
             var matchEmoji = Regex.Matches(emojiId, regex);
             int nr = matchEmoji.Count;
+            await Context.Channel.SendMessageAsync($"nr of matches: {nr}");
 
             if (!Emote.TryParse(emojiId, out var parsedEmoteiId)) {
                 if (nr == 1) {
