@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace Floofbot.Modules
 {
@@ -228,32 +229,64 @@ namespace Floofbot.Modules
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
 
-            //TODO default emojis / invalit input
+
+            /* TODO
+                1) use original regex to find all emoji matches
+                2) count the number of matches. Too many is an error too little is an error
+                3) try Parse that result. If it parses it's a custom emoji, if it doesn't it's a normal emoji
+            */
+
             //TODO actually enlarging the emoji
 
             //       await Context.Channel.SendMessageAsync("The emoji is:");
             //       await Context.Channel.SendMessageAsync(emojiId);
 
             EmbedBuilder builder = new EmbedBuilder();
-            builder.Title = $"Enlarged {emojiId}";
             builder.Color = EMBED_COLOR;
 
-            if (!Emote.TryParse(emojiId, out var parsedEmojiId))
+            var regex = "( ?(<:.*:[0-9]*>)|(\u00a9|\u00ae|[\u2000-\u200c]|[\u200e-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]) ?)";
+
+     //       var matchEmoji = Regex.Match(emojiId, regex);
+        //    if (matchEmoji.Success)
+
+            var matchEmoji = Regex.Matches(emojiId, regex);
+            int nr = matchEmoji.Count;
+
+            if (!Emote.TryParse(emojiId, out var parsedEmoteiId)) {
+                if (nr == 1) {
+                    builder.Title = $"Enlarged \\{emojiId}";
+                    builder.WithDescription($"{emojiId}");
+                }
+                else {
+                    if (nr == 0) {
+                        await Context.Channel.SendMessageAsync("ERROR: `Please provide a valid emoji.`");
+                        return;
+                    }
+                    else {
+                        await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
+                        return;
+                    }
+                }
+            }
+            else
             {
-                await Context.Channel.SendMessageAsync("Please provide a valid emoji.");
+                if (nr != 1)
+                {
+                    await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
+                    return;
+                }
 
-                string deb = emojiId.ToString();
-                await Context.Channel.SendMessageAsync($"The input was: {deb}");
-                return;
-            }
+                builder.Title = $"Enlarged {emojiId}";
+                string str = parsedEmoteiId.Id.ToString();
 
-            string str = parsedEmojiId.Id.ToString();
-
-            if (parsedEmojiId.Animated){
-                builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.gif");
-            }
-            else {
-                builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.png");
+                if (parsedEmoteiId.Animated)
+                {
+                    builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.gif");
+                }
+                else
+                {
+                    builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.png");
+                }
             }
 
             await SendEmbed(builder.Build());
