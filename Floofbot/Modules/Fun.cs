@@ -228,31 +228,35 @@ namespace Floofbot.Modules
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
 
-//TODO tryparse
-//TODO default emojis
-//TODO actually enlarging the emoji
+            //TODO default emojis / invalit input
+            //TODO actually enlarging the emoji
 
-            var e = Emote.Parse(emojiId);
-            string str = e.Id.ToString();
+            //       await Context.Channel.SendMessageAsync("The emoji is:");
+            //       await Context.Channel.SendMessageAsync(emojiId);
 
-            // await Context.Channel.SendMessageAsync(str);
-
-            if (e.Animated){
-                await Context.Channel.SendMessageAsync($"https://cdn.discordapp.com/emojis/{str}.gif");
-            }
-            else {
-                await Context.Channel.SendMessageAsync($"https://cdn.discordapp.com/emojis/{str}.png");
-            }
-            
             EmbedBuilder builder = new EmbedBuilder();
-            builder.Title = "Enlarged emoji";
-           // builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}");
+            builder.Title = $"Enlarged {emojiId}";
             builder.Color = EMBED_COLOR;
 
-           // await SendEmbed(builder.Build());
+            if (!Emote.TryParse(emojiId, out var parsedEmojiId))
+            {
+                await Context.Channel.SendMessageAsync("Please provide a valid emoji.");
 
-//TODO builder?
+                string deb = emojiId.ToString();
+                await Context.Channel.SendMessageAsync($"The input was: {deb}");
+                return;
+            }
 
+            string str = parsedEmojiId.Id.ToString();
+
+            if (parsedEmojiId.Animated){
+                builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.gif");
+            }
+            else {
+                builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.png");
+            }
+
+            await SendEmbed(builder.Build());
         }
 
         private async Task SendAnimalEmbed(string title, string fileUrl)
