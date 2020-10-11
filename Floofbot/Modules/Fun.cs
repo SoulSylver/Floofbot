@@ -244,17 +244,15 @@ namespace Floofbot.Modules
             EmbedBuilder builder = new EmbedBuilder();
             builder.Color = EMBED_COLOR;
 
-            var regex = "( ?(<:.*:[0-9]*>)|(\u00a9|\u00ae|[\u2000-\u200c]|[\u200e-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]) ?)";
+            var regex = "((<a?:[\\w\\d]+:\\d*>)|(\u00a9|\u00ae|[\u2000-\u200c]|[\u200e-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]))";
 
-            //new regex
-           // var regex = "((<:.*:[0-9]*>)|(\u00a9|\u00ae|[\u2000-\u200c]|[\u200e-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]))";
-
-     //       var matchEmoji = Regex.Match(emojiId, regex);
-        //    if (matchEmoji.Success)
+            //       var matchEmoji = Regex.Match(emojiId, regex);
+            //    if (matchEmoji.Success)
 
             var matchEmoji = Regex.Matches(emojiId, regex);
             int nr = matchEmoji.Count;
-            await Context.Channel.SendMessageAsync($"nr of matches: {nr}");
+
+         //   await Context.Channel.SendMessageAsync($"nr of matches: {nr}");
 
             if (!Emote.TryParse(emojiId, out var parsedEmoteiId)) {
                 if (nr == 1) {
