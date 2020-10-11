@@ -229,6 +229,7 @@ namespace Floofbot.Modules
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
 
+            //TODO flags
 
             /* TODO
                 1) use original regex to find all emoji matches
@@ -252,7 +253,7 @@ namespace Floofbot.Modules
             var matchEmoji = Regex.Matches(emojiId, regex);
             int nr = matchEmoji.Count;
 
-         //   await Context.Channel.SendMessageAsync($"nr of matches: {nr}");
+            await Context.Channel.SendMessageAsync($"nr of matches: {nr}");
 
             if (!Emote.TryParse(emojiId, out var parsedEmoteiId)) {
                 if (nr == 1) {
