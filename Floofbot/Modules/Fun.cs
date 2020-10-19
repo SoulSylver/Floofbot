@@ -229,68 +229,62 @@ namespace Floofbot.Modules
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
 
-            //TODO flags
-
-            /* TODO
-                1) use original regex to find all emoji matches
-                2) count the number of matches. Too many is an error too little is an error
-                3) try Parse that result. If it parses it's a custom emoji, if it doesn't it's a normal emoji
-            */
-
-            //TODO actually enlarging the emoji
-
-            //       await Context.Channel.SendMessageAsync("The emoji is:");
-            //       await Context.Channel.SendMessageAsync(emojiId);
+            // TODO emoji + modifiers and flags
+            // TODO actually enlarging the emoji
 
             EmbedBuilder builder = new EmbedBuilder();
             builder.Color = EMBED_COLOR;
 
+            // Regex used for matching emoji types
             var regex = "((<a?:[\\w\\d]+:\\d*>)|(\u00a9|\u00ae|[\u2000-\u200c]|[\u200e-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]))";
-
-            //       var matchEmoji = Regex.Match(emojiId, regex);
-            //    if (matchEmoji.Success)
 
             var matchEmoji = Regex.Matches(emojiId, regex);
             int nr = matchEmoji.Count;
 
+            // DEBUG
             await Context.Channel.SendMessageAsync($"nr of matches: {nr}");
 
-            if (!Emote.TryParse(emojiId, out var parsedEmoteiId)) {
-                if (nr == 1) {
+            // Discovering the emoji that needs to be enlarged
+            if (nr == 1)
+            {
+                if (Emote.TryParse(emojiId, out var parsedEmoteiId))
+                {
+                    builder.Title = $"Enlarged {emojiId}";
+                    string str = parsedEmoteiId.Id.ToString();
+
+                    if (parsedEmoteiId.Animated)
+                    {
+                        builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.gif");
+                    }
+                    else
+                    {
+                        builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.png");
+                    }
+                }
+                else
+                {
                     builder.Title = $"Enlarged \\{emojiId}";
                     builder.WithDescription($"{emojiId}");
-                }
-                else {
-                    if (nr == 0) {
-                        await Context.Channel.SendMessageAsync("ERROR: `Please provide a valid emoji.`");
-                        return;
-                    }
-                    else {
-                        await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
-                        return;
-                    }
                 }
             }
             else
             {
-                if (nr != 1)
+                if (nr == 0)
                 {
-                    await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
+                    await Context.Channel.SendMessageAsync("ERROR: `Please provide a valid emoji.`");
                     return;
                 }
 
-                builder.Title = $"Enlarged {emojiId}";
-                string str = parsedEmoteiId.Id.ToString();
+                if (nr == 2)
+                {
+                    await Context.Channel.SendMessageAsync("TODO emoji + modifier, flag or 2 emojis");
+                    return;
+                }
 
-                if (parsedEmoteiId.Animated)
-                {
-                    builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.gif");
-                }
-                else
-                {
-                    builder.WithImageUrl($"https://cdn.discordapp.com/emojis/{str}.png");
-                }
+                await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
+                return;
             }
+
 
             await SendEmbed(builder.Build());
         }
