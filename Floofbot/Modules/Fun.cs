@@ -238,6 +238,7 @@ namespace Floofbot.Modules
             // Regex used for matching emoji types
             var regex = "((<a?:[\\w\\d]+:\\d*>)|(\u00a9|\u00ae|[\u2000-\u200c]|[\u200e-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]))";
 
+            // Checking the nr of matches
             var matchEmoji = Regex.Matches(emojiId, regex);
             int nr = matchEmoji.Count;
 
