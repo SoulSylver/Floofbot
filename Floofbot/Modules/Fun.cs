@@ -266,6 +266,9 @@ namespace Floofbot.Modules
                 {
                     builder.Title = $"Enlarged \\{emojiId}";
                     builder.WithDescription($"{emojiId}");
+
+                    // TODO obtain an image link
+
                 }
             }
             else
