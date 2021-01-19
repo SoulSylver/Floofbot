@@ -13,7 +13,7 @@ using Floofbot.Configs;
 namespace Floofbot
 {
     [Summary("Utility commands")]
-    [Discord.Commands.Name("Utilities")]
+    [Name("Utilities")]
     public class Utilities : InteractiveBase
     {
         private static readonly Discord.Color EMBED_COLOR = Color.Magenta;
@@ -40,6 +40,7 @@ namespace Floofbot
         [Command("userinfo")]
         [Summary("Displays information on a mentioned user. If no parameters are given, displays the user's own information")]
         [RequireContext(ContextType.Guild)]
+        [RequireBotPermission(ChannelPermission.EmbedLinks)]
         public async Task UserInfo(IGuildUser usr = null)
         {
             var user = usr ?? Context.User as IGuildUser;
@@ -78,6 +79,7 @@ namespace Floofbot
         [Command("avatar")]
         [Summary("Displays a mentioned user's avatar. If no parameters are given, displays the user's own avatar")]
         [RequireContext(ContextType.Guild)]
+        [RequireBotPermission(ChannelPermission.EmbedLinks)]
         public async Task Avatar([Remainder] IGuildUser user = null)
         {
             if (user == null)
@@ -94,8 +96,8 @@ namespace Floofbot
             await Context.Channel.SendMessageAsync("", false, builder.Build());
         }
 
-        [Command("say")]
-        [Summary("Repeats a message")]
+        [Command("embed")]
+        [Summary("Repeats a message in an embed format")]
         [RequireContext(ContextType.Guild)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
         public async Task RepeatMessage([Remainder] string message =null)
@@ -112,12 +114,30 @@ namespace Floofbot
             }
             else
             {
-                await Context.Channel.SendMessageAsync("Usage: `.say [message]`");
+                await Context.Channel.SendMessageAsync("Usage: `.embed [message]`");
+            }
+        }
+
+        [Command("echo")]
+        [Summary("Repeats a text message directly")]
+        [RequireContext(ContextType.Guild)]
+        [RequireUserPermission(GuildPermission.ManageMessages)]
+        public async Task EchoMessage([Remainder] string message = null)
+        {
+            if (message != null)
+            {
+                await Context.Channel.SendMessageAsync(message);
+                await Context.Channel.DeleteMessageAsync(Context.Message.Id);
+            }
+            else
+            {
+                await Context.Channel.SendMessageAsync("Usage: `.echo [message]`");
             }
         }
 
         [Command("serverinfo")]
         [Summary("Returns information about the current server")]
+        [RequireBotPermission(ChannelPermission.EmbedLinks)]
         public async Task ServerInfo()
         {
             SocketGuild guild = Context.Guild;

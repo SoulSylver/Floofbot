@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 namespace Floofbot.Modules
 {
     [Summary("Fun commands")]
-    [Discord.Commands.Name("Fun")]
+    [Name("Fun")]
     public class Fun : ModuleBase<SocketCommandContext>
     {
         private static readonly Discord.Color EMBED_COLOR = Color.DarkOrange;
@@ -33,19 +33,27 @@ namespace Floofbot.Modules
         public async Task XKCD([Summary("Comic ID")] string comicId = "")
         {
             int parsedComicId;
-            if (!int.TryParse(comicId, out parsedComicId) || parsedComicId <= 0)
+            if ((!int.TryParse(comicId, out parsedComicId) || parsedComicId <= 0) && !String.IsNullOrEmpty(comicId))
             {
-                await Context.Channel.SendMessageAsync("Comic ID must be a positive integer less than or equal to Int32.MaxValue.");
+                await Context.Channel.SendMessageAsync("Comic ID must be a positive integer less than or equal to " + Int32.MaxValue + ".");
                 return;
             }
 
-            string json = await ApiFetcher.RequestSiteContentAsString($"https://xkcd.com/{comicId}/info.0.json");
+            string json;
+            if (parsedComicId == 0)
+            {
+                json = await ApiFetcher.RequestSiteContentAsString("https://xkcd.com/info.0.json");
+            }
+            else
+            {
+                json = await ApiFetcher.RequestSiteContentAsString($"https://xkcd.com/{comicId}/info.0.json");
+            }
+
             if (string.IsNullOrEmpty(json))
             {
                 await Context.Channel.SendMessageAsync("404 Not Found");
                 return;
             }
-
             string imgLink;
             string imgHoverText;
             string comicTitle;
@@ -117,7 +125,7 @@ namespace Floofbot.Modules
         public async Task RequestCat()
         {
             string fileUrl = await ApiFetcher.RequestEmbeddableUrlFromApi("https://aws.random.cat/meow", "file");
-            if (!string.IsNullOrEmpty(fileUrl))
+            if (!string.IsNullOrEmpty(fileUrl) && Uri.IsWellFormedUriString(fileUrl, UriKind.Absolute))
             {
                 await SendAnimalEmbed(":cat:", fileUrl);
             }
@@ -132,7 +140,7 @@ namespace Floofbot.Modules
         public async Task RequestDog()
         {
             string fileUrl = await ApiFetcher.RequestEmbeddableUrlFromApi("https://random.dog/woof.json", "url");
-            if (!string.IsNullOrEmpty(fileUrl))
+            if (!string.IsNullOrEmpty(fileUrl) && Uri.IsWellFormedUriString(fileUrl, UriKind.Absolute))
             {
                 await SendAnimalEmbed(":dog:", fileUrl);
             }
@@ -147,7 +155,7 @@ namespace Floofbot.Modules
         public async Task RequestFox()
         {
             string fileUrl = await ApiFetcher.RequestEmbeddableUrlFromApi("https://wohlsoft.ru/images/foxybot/randomfox.php", "file");
-            if (!string.IsNullOrEmpty(fileUrl))
+            if (!string.IsNullOrEmpty(fileUrl) && Uri.IsWellFormedUriString(fileUrl, UriKind.Absolute))
             {
                 await SendAnimalEmbed(":fox:", fileUrl);
             }
@@ -162,7 +170,7 @@ namespace Floofbot.Modules
         public async Task RequestBirb()
         {
             string fileUrl = await ApiFetcher.RequestEmbeddableUrlFromApi("https://random.birb.pw/tweet.json", "file");
-            if (!string.IsNullOrEmpty(fileUrl))
+            if (!string.IsNullOrEmpty(fileUrl) && Uri.IsWellFormedUriString(fileUrl, UriKind.Absolute))
             {
                 fileUrl = "https://random.birb.pw/img/" + fileUrl;
                 await SendAnimalEmbed(":bird:", fileUrl);

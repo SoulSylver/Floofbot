@@ -1,30 +1,35 @@
 ﻿using Discord;
-using Discord.Commands;
 using Discord.WebSocket;
+using Floofbot.Configs;
 using Floofbot.Services.Repository;
 using Floofbot.Services.Repository.Models;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Floofbot.Services
 {
-    public class EventLoggerService
+    public class EventHandlerService
     {
 
         private DiscordSocketClient _client;
         private WordFilterService _wordFilterService;
         private NicknameAlertService _nicknameAlertService;
         private RaidProtectionService _raidProtectionService;
+        private UserRoleRetentionService _userRoleRetentionService;
+        private WelcomeGateService _welcomeGateService;
         private static readonly Color ADMIN_COLOR = Color.DarkOrange;
 
+        // list of announcement channels
+        private List<ulong> announcementChannels;
 
-        public EventLoggerService(DiscordSocketClient client)
+        // rules gate config
+        private Dictionary <string, string> rulesGateConfig = BotConfigFactory.Config.RulesGate;
+
+
+        public EventHandlerService(DiscordSocketClient client)
         {
             _client = client;
 
@@ -32,6 +37,9 @@ namespace Floofbot.Services
             _wordFilterService = new WordFilterService();
             _nicknameAlertService = new NicknameAlertService(new FloofDataContext());
             _raidProtectionService = new RaidProtectionService();
+            _userRoleRetentionService = new UserRoleRetentionService(new FloofDataContext());
+            _welcomeGateService = new WelcomeGateService(new FloofDataContext());
+
             // event handlers
             _client.MessageUpdated += MessageUpdated;
             _client.MessageDeleted += MessageDeleted;
@@ -40,8 +48,27 @@ namespace Floofbot.Services
             _client.UserJoined += UserJoined;
             _client.UserLeft += UserLeft;
             _client.GuildMemberUpdated += GuildMemberUpdated;
+            _client.GuildMemberUpdated += _welcomeGateService.HandleWelcomeGate; // welcome gate handler
+            _client.UserUpdated += UserUpdated;
             _client.MessageReceived += OnMessage;
+            _client.MessageReceived += RulesGate; // rfurry rules gate
             _client.ReactionAdded += _nicknameAlertService.OnReactionAdded;
+
+            // a list of announcement channels for auto publishing
+            announcementChannels = BotConfigFactory.Config.AnnouncementChannels;
+        }
+        public async Task PublishAnnouncementMessages(SocketUserMessage msg)
+        {
+            foreach (ulong chan in announcementChannels)
+            {
+                if (msg.Channel.Id == chan)
+                {
+                    if (msg.Channel.GetType() == typeof(SocketNewsChannel))
+                    {
+                        await msg.CrosspostAsync();
+                    }
+                }
+            }
         }
         public async Task<ITextChannel> GetChannel(Discord.IGuild guild, string eventName = null)
         {
@@ -68,13 +95,6 @@ namespace Floofbot.Services
                 return false;
 
             return ServerConfig.IsOn;
-        }
-        private async Task HandleBadMessage(SocketUser user, SocketMessage msg)
-        {
-            await msg.DeleteAsync();
-            var botMsg = await msg.Channel.SendMessageAsync($"{user.Mention} watch your language! You've said a bad word!");
-            await Task.Delay(5000);
-            await botMsg.DeleteAsync();
         }
         private async Task CheckUserAutoban(IGuildUser user)
         {
@@ -104,6 +124,26 @@ namespace Floofbot.Services
                 }
             }
         }
+
+        // rfurry rules gate
+        public async Task RulesGate(SocketMessage msg)
+        {
+            var userMsg = msg as SocketUserMessage;
+            if (msg == null || msg.Author.IsBot)
+                return;
+
+            // rules gate info
+            ulong rulesChannelId = Convert.ToUInt64(rulesGateConfig["RulesChannel"]);
+            ulong readRulesRoleId = Convert.ToUInt64(rulesGateConfig["RulesRole"]);
+            string rulesBypassString = rulesGateConfig["Keyword"];
+
+            if (msg.Channel.Id == rulesChannelId && userMsg.Content.ToLower().Contains(rulesBypassString)) 
+            {
+                var user = (IGuildUser)msg.Author;
+                await user.AddRoleAsync(user.Guild.GetRole(readRulesRoleId));
+                await userMsg.DeleteAsync();
+            }
+        }
         public Task OnMessage(SocketMessage msg)
         {
             if (msg.Channel.GetType() == typeof(SocketDMChannel))
@@ -114,6 +154,9 @@ namespace Floofbot.Services
             {
                 try
                 {
+                    // handle announcement messages
+                    await PublishAnnouncementMessages(userMsg);
+
                     if (msg == null || msg.Author.IsBot)
                         return;
                     var channel = msg.Channel as ITextChannel;
@@ -122,13 +165,6 @@ namespace Floofbot.Services
                     if (messageTriggeredRaidProtection)
                     {
                         await msg.DeleteAsync();
-                        return;
-                    }
-                  
-                    bool hasBadWord = _wordFilterService.hasFilteredWord(new FloofDataContext(), msg.Content, channel.Guild.Id, msg.Channel.Id);
-                    if (hasBadWord)
-                    {
-                        await HandleBadMessage(msg.Author, msg);
                         return;
                     }
 
@@ -177,7 +213,12 @@ namespace Floofbot.Services
 
                     bool hasBadWord = _wordFilterService.hasFilteredWord(new FloofDataContext(), after.Content, channel.Guild.Id, after.Channel.Id);
                     if (hasBadWord)
-                        await HandleBadMessage(after.Author, after);
+                    {
+                        await after.DeleteAsync();
+                        var botMsg = await after.Channel.SendMessageAsync($"{after.Author.Mention} There was a filtered word in that message. Please be mindful of your language!");
+                        await Task.Delay(5000);
+                        await botMsg.DeleteAsync();
+                    }
 
                     if ((IsToggled(channel.Guild)) == false) // not toggled on
                         return;
@@ -240,9 +281,16 @@ namespace Floofbot.Services
                     embed.WithTitle($"⚠️ Message Deleted | {message.Author.Username}#{message.Author.Discriminator}")
                          .WithColor(Color.Gold)
                          .WithDescription($"{message.Author.Mention} ({message.Author.Id}) has had their message deleted in {channel.Mention}!")
-                         .AddField("Content", message.Content)
                          .WithCurrentTimestamp()
                          .WithFooter($"user_message_deleted user_messagelog {message.Author.Id}");
+                    if (message.Content.Length > 0)
+                    {
+                        embed.AddField("Content", message.Content);
+                    }
+                    if (message.Attachments.Count > 0)
+                    {
+                        embed.AddField("Attachments", String.Join("\n", message.Attachments.Select(it => it.Url)));
+                    }
 
                     if (Uri.IsWellFormedUriString(message.Author.GetAvatarUrl(), UriKind.Absolute))
                         embed.WithThumbnailUrl(message.Author.GetAvatarUrl());
@@ -398,6 +446,7 @@ namespace Floofbot.Services
                         return;
 
                     await _raidProtectionService.CheckForExcessiveJoins(user.Guild);
+                    await _userRoleRetentionService.RestoreUserRoles(user);
 
                     if ((IsToggled(user.Guild)) == false)
                         return;
@@ -439,6 +488,8 @@ namespace Floofbot.Services
                     if (user.IsBot)
                         return;
 
+                    await _userRoleRetentionService.LogUserRoles(user);
+
                     if ((IsToggled(user.Guild)) == false)
                         return;
 
@@ -475,6 +526,77 @@ namespace Floofbot.Services
             return Task.CompletedTask;
 
         }
+        public Task UserUpdated(SocketUser before, SocketUser userAfter)
+        {
+
+            var _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (!(userAfter is SocketGuildUser after))
+                        return;
+
+                    if (before == null || after == null) // empty user params
+                        return;
+
+                    if (after.IsBot)
+                        return;
+
+                    if (IsToggled(after.Guild) == false) // turned off
+                        return;
+
+                    Discord.ITextChannel channel = await GetChannel(after.Guild, "MemberUpdatesChannel");
+                    if (channel == null) // no log channel set
+                        return;
+
+                    var embed = new EmbedBuilder();
+
+                    if (before.Username != after.Username)
+                    {
+                        embed.WithTitle($"👥 Username Changed | {after.Username}#{after.Discriminator}")
+                             .WithColor(Color.Purple)
+                             .WithDescription($"{after.Mention} | ``{after.Id}``")
+                             .AddField("Old Username", before.Username, true)
+                             .AddField("New Name", after.Username, true)
+                             .WithFooter($"user_username_change user_namelog {after.Id}")
+                             .WithCurrentTimestamp();
+
+                        if (Uri.IsWellFormedUriString(after.GetAvatarUrl(), UriKind.Absolute))
+                            embed.WithThumbnailUrl(after.GetAvatarUrl());
+
+                        bool hasBadWord = _wordFilterService.hasFilteredWord(new FloofDataContext(), after.Username, channel.Guild.Id);
+                        if (hasBadWord)
+                            await _nicknameAlertService.HandleBadNickname(after, after.Guild);
+
+                    }
+                    else if (before.AvatarId != after.AvatarId)
+                    {
+                        embed.WithTitle($"🖼️ Avatar Changed | {after.Username}#{after.Discriminator}")
+                             .WithColor(Color.Purple)
+                             .WithDescription($"{after.Mention} | ``{after.Id}``")
+                             .WithFooter($"user_avatar_change {after.Id}")
+                             .WithCurrentTimestamp();
+                        if (Uri.IsWellFormedUriString(before.GetAvatarUrl(), UriKind.Absolute))
+                            embed.WithThumbnailUrl(before.GetAvatarUrl());
+                        if (Uri.IsWellFormedUriString(after.GetAvatarUrl(), UriKind.Absolute))
+                            embed.WithImageUrl(after.GetAvatarUrl());
+                    }
+                    else
+                    {
+                        return;
+                    }
+                    await channel.SendMessageAsync("", false, embed.Build());
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error with the user updated event handler: " + ex);
+                    return;
+                }
+            });
+            return Task.CompletedTask;
+
+        }
+
         public Task GuildMemberUpdated(SocketGuildUser before, SocketGuildUser after)
         {
             var _ = Task.Run(async () =>
@@ -487,74 +609,42 @@ namespace Floofbot.Services
                     if (after.IsBot)
                         return;
 
-                    var user = after as SocketGuildUser;
-
-                    if ((IsToggled(user.Guild) == false)) // turned off
+                    if (IsToggled(after.Guild) == false) // turned off
                         return;
 
-                    Discord.ITextChannel channel = await GetChannel(user.Guild, "MemberUpdatesChannel");
+                    Discord.ITextChannel channel = await GetChannel(after.Guild, "MemberUpdatesChannel");
                     if (channel == null) // no log channel set
                         return;
 
                     var embed = new EmbedBuilder();
 
-                    if (before.Username != after.Username)
+                    if (before.Nickname != after.Nickname)
                     {
-                        embed.WithTitle($"👥 Username Changed | {user.Username}#{user.Discriminator}")
+                        embed.WithTitle($"👥 Nickname Changed | {after.Username}#{after.Discriminator}")
                              .WithColor(Color.Purple)
-                             .WithDescription($"{user.Mention} | ``{user.Id}``")
-                             .AddField("Old Username", user.Username, true)
-                             .AddField("New Name", user.Username, true)
-                             .WithFooter($"user_username_change user_namelog {user.Id}")
-                             .WithCurrentTimestamp();
-
-                        if (Uri.IsWellFormedUriString(user.GetAvatarUrl(), UriKind.Absolute))
-                            embed.WithThumbnailUrl(user.GetAvatarUrl());
-
-                        bool hasBadWord = _wordFilterService.hasFilteredWord(new FloofDataContext(), after.Username, channel.Guild.Id);
-                        if (hasBadWord)
-                            await _nicknameAlertService.HandleBadNickname(user, user.Guild);
-
-                    }
-                    else if (before.Nickname != after.Nickname)
-                    {
-                        embed.WithTitle($"👥 Nickname Changed | {user.Username}#{user.Discriminator}")
-                             .WithColor(Color.Purple)
-                             .WithDescription($"{user.Mention} | ``{user.Id}``")
-                             .WithFooter($"user_nickname_change user_namelog {user.Id}")
+                             .WithDescription($"{after.Mention} | ``{after.Id}``")
+                             .WithFooter($"user_nickname_change user_namelog {after.Id}")
                              .WithCurrentTimestamp();
 
                         if (before.Nickname != null && after.Nickname != null) // changing nickname
                         {
                             embed.AddField("Old Nickname", before.Nickname, true);
-                            embed.AddField("New Nickname", user.Nickname, true);
+                            embed.AddField("New Nickname", after.Nickname, true);
                         }
                         else if (after.Nickname == null) // removed their nickname
                             embed.AddField("Old Nickname", before.Nickname, true);
                         else // new nickname, didnt have one before
-                            embed.AddField("New Nickname", user.Nickname, true);
+                            embed.AddField("New Nickname", after.Nickname, true);
 
-                        if (Uri.IsWellFormedUriString(user.GetAvatarUrl(), UriKind.Absolute))
-                            embed.WithThumbnailUrl(user.GetAvatarUrl());
+                        if (Uri.IsWellFormedUriString(after.GetAvatarUrl(), UriKind.Absolute))
+                            embed.WithThumbnailUrl(after.GetAvatarUrl());
                         if (after.Nickname != null)
                         {
                             bool hasBadWord = _wordFilterService.hasFilteredWord(new FloofDataContext(), after.Nickname, channel.Guild.Id);
                             if (hasBadWord)
-                                await _nicknameAlertService.HandleBadNickname(user, user.Guild);
+                                await _nicknameAlertService.HandleBadNickname(after, after.Guild);
                         }
 
-                    }
-                    else if (before.AvatarId != after.AvatarId)
-                    {
-                        embed.WithTitle($"🖼️ Avatar Changed | {user.Username}#{user.Discriminator}")
-                             .WithColor(Color.Purple)
-                             .WithDescription($"{user.Mention} | ``{user.Id}``")
-                             .WithFooter($"user_avatar_change {user.Id}")
-                             .WithCurrentTimestamp();
-                        if (Uri.IsWellFormedUriString(before.GetAvatarUrl(), UriKind.Absolute))
-                            embed.WithThumbnailUrl(before.GetAvatarUrl());
-                        if (Uri.IsWellFormedUriString(after.GetAvatarUrl(), UriKind.Absolute))
-                            embed.WithImageUrl(after.GetAvatarUrl());
                     }
                     else if (before.Roles.Count != after.Roles.Count)
                     {
@@ -565,10 +655,10 @@ namespace Floofbot.Services
                         if (before.Roles.Count > after.Roles.Count) // roles removed
                         {
                             roleDifference = beforeRoles.Except(afterRoles).ToList();
-                            embed.WithTitle($"❗ Roles Removed | {user.Username}#{user.Discriminator}")
+                            embed.WithTitle($"❗ Roles Removed | {after.Username}#{after.Discriminator}")
                                  .WithColor(Color.Orange)
-                                 .WithDescription($"{user.Mention} | ``{user.Id}``")
-                                 .WithFooter($"user_roles_removed user_rolelog {user.Id}")
+                                 .WithDescription($"{after.Mention} | ``{after.Id}``")
+                                 .WithFooter($"user_roles_removed user_rolelog {after.Id}")
                                  .WithCurrentTimestamp();
 
                             foreach (SocketRole role in roleDifference)
@@ -576,23 +666,23 @@ namespace Floofbot.Services
                                 embed.AddField("Role Removed", role);
                             }
 
-                            if (Uri.IsWellFormedUriString(user.GetAvatarUrl(), UriKind.Absolute))
-                                embed.WithThumbnailUrl(user.GetAvatarUrl());
+                            if (Uri.IsWellFormedUriString(after.GetAvatarUrl(), UriKind.Absolute))
+                                embed.WithThumbnailUrl(after.GetAvatarUrl());
                         }
                         else if (before.Roles.Count < after.Roles.Count) // roles added
                         {
                             roleDifference = afterRoles.Except(beforeRoles).ToList();
-                            embed.WithTitle($"❗ Roles Added | {user.Username}#{user.Discriminator}")
+                            embed.WithTitle($"❗ Roles Added | {after.Username}#{after.Discriminator}")
                                  .WithColor(Color.Orange)
-                                 .WithDescription($"{user.Mention} | ``{user.Id}``")
-                                 .WithFooter($"user_roles_added user_rolelog {user.Id}")
+                                 .WithDescription($"{after.Mention} | ``{after.Id}``")
+                                 .WithFooter($"user_roles_added user_rolelog {after.Id}")
                                  .WithCurrentTimestamp();
                             foreach (SocketRole role in roleDifference)
                             {
                                 embed.AddField("Role Added", role);
                             }
-                            if (Uri.IsWellFormedUriString(user.GetAvatarUrl(), UriKind.Absolute))
-                                embed.WithThumbnailUrl(user.GetAvatarUrl());
+                            if (Uri.IsWellFormedUriString(after.GetAvatarUrl(), UriKind.Absolute))
+                                embed.WithThumbnailUrl(after.GetAvatarUrl());
                         }
                     }
                     else
@@ -724,76 +814,6 @@ namespace Floofbot.Services
                 }
             });
             return Task.CompletedTask;
-        }
-
-        class WordFilterService
-        {
-            List<FilteredWord> _filteredWords;
-            DateTime _lastRefreshedTime;
-
-            public bool hasFilteredWord(FloofDataContext floofDb, string messageContent, ulong serverId) // names
-            {
-                // return false if none of the serverIds match or filtering has been disabled for the server
-                if (!floofDb.FilterConfigs.AsQueryable()
-                    .Any(x => x.ServerId == serverId && x.IsOn))
-                {
-                    return false;
-                }
-
-                DateTime currentTime = DateTime.Now;
-                if (_lastRefreshedTime == null || currentTime.Subtract(_lastRefreshedTime).TotalMinutes >= 30)
-                {
-                    _filteredWords = floofDb.FilteredWords.AsQueryable()
-                        .Where(x => x.ServerId == serverId).ToList();
-                    _lastRefreshedTime = currentTime;
-                }
-
-                foreach (var filteredWord in _filteredWords)
-                {
-                    Regex r = new Regex($"{filteredWord.Word}",
-                        RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                    if (r.IsMatch(messageContent))
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            public bool hasFilteredWord(FloofDataContext floofDb, string messageContent, ulong serverId, ulong channelId) // messages
-            {
-                // return false if none of the serverIds match or filtering has been disabled for the server
-                if (!floofDb.FilterConfigs.AsQueryable()
-                    .Any(x => x.ServerId == serverId && x.IsOn))
-                {
-                    return false;
-                }
-
-                // whitelist means we don't have the filter on for this channel
-                if (floofDb.FilterChannelWhitelists.AsQueryable()
-                    .Any(x => x.ChannelId == channelId && x.ServerId == serverId))
-                {
-                    return false;
-                }
-
-                DateTime currentTime = DateTime.Now;
-                if (_lastRefreshedTime == null || currentTime.Subtract(_lastRefreshedTime).TotalMinutes >= 30)
-                {
-                    _filteredWords = floofDb.FilteredWords.AsQueryable()
-                        .Where(x => x.ServerId == serverId).ToList();
-                    _lastRefreshedTime = currentTime;
-                }
-
-                foreach (var filteredWord in _filteredWords)
-                {
-                    Regex r = new Regex(@$"\b({filteredWord.Word})\b",
-                        RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                    if (r.IsMatch(messageContent))
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
         }
     }
 }

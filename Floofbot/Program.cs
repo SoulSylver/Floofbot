@@ -22,7 +22,7 @@ namespace Floofbot
             if (args.Length == 1)
                 _configPath = args[0];
             else
-                _configPath = botDirectory + "/app.config";
+                _configPath = botDirectory + "/config.yaml";
 
 
             InitialiseLogger();
@@ -67,7 +67,7 @@ namespace Floofbot
 
             try
             {
-                var _EventLoggerService = new EventLoggerService(_client);
+                var _EventLoggerService = new EventHandlerService(_client);
                 await _client.LoginAsync(TokenType.Bot, token);
                 await _client.StartAsync();
             }
