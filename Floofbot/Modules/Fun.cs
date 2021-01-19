@@ -237,7 +237,6 @@ namespace Floofbot.Modules
         public async Task enlarge([Summary("emoji ID")] string emojiId = "")
         {
 
-            // TODO emoji + modifiers and flags
             // TODO actually enlarging the emoji
 
             EmbedBuilder builder = new EmbedBuilder();
@@ -272,10 +271,11 @@ namespace Floofbot.Modules
                 }
                 else
                 {
-                    builder.Title = $"Enlarged \\{emojiId}";
-                    builder.WithDescription($"{emojiId}");
 
-                    // TODO obtain an image link
+                    var emojiHex = (((emojiId[0] - 0xD800) * 0x400) + (emojiId[1] - 0xDC00) + 0x10000).ToString("x4");
+
+                    builder.Title = $"Enlarged \\{emojiId}";
+                    builder.WithImageUrl($"https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/{emojiHex}.png");
 
                 }
             }
@@ -289,12 +289,20 @@ namespace Floofbot.Modules
 
                 if (nr == 2)
                 {
-                    await Context.Channel.SendMessageAsync("TODO emoji + modifier, flag or 2 emojis");
+
+                    var emojiHex1 = (((emojiId[0] - 0xD800) * 0x400) + (emojiId[1] - 0xDC00) + 0x10000).ToString("x4");
+                    var emojiHex2 = (((emojiId[2] - 0xD800) * 0x400) + (emojiId[3] - 0xDC00) + 0x10000).ToString("x4");
+
+                    builder.Title = $"Enlarged \\{emojiId}";
+                    builder.WithImageUrl($"https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/{emojiHex1}-{emojiHex2}.png");
+
+
+                }
+                else
+                {
+                    await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
                     return;
                 }
-
-                await Context.Channel.SendMessageAsync("ERROR: `The input text has too many parameters.`");
-                return;
             }
 
 
